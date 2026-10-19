@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Wildfire Analysis</title>
+<link rel="icon" href="../../public/favicon.svg" />
+<style>
+  :root { --bg:#0b0d10; --panel:rgba(14,17,22,.82); --line:#262c35; --text:#d8dde4; --dim:#7d8794; --fire:#ff7a1a; --ret:#e0457b; --ok:#4cc38a; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--text); font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; overflow:hidden; }
+  canvas#scene { display:block; }
+  .panel { position:absolute; background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:12px 14px; backdrop-filter:blur(6px); }
+  #stats { top:16px; left:16px; width:260px; }
+  #drones { top:16px; right:16px; width:240px; }
+  #timeline { left:16px; right:16px; bottom:16px; display:flex; gap:14px; align-items:center; }
+  h1 { font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--dim); margin:0 0 10px; font-weight:600; }
+  .row { display:flex; justify-content:space-between; padding:3px 0; }
+  .row b { font-weight:600; }
+  .fire { color:var(--fire); } .ret { color:var(--ret); } .ok { color:var(--ok); }
+  #chart { width:100%; height:70px; margin-top:10px; border-top:1px solid var(--line); }
+  .drone { padding:6px 0; border-bottom:1px solid var(--line); }
+  .drone:last-child { border:0; }
+  .drone .id { color:#7cc4ff; }
+  button { background:#1a1f27; color:var(--text); border:1px solid var(--line); border-radius:4px; padding:6px 12px; font:inherit; cursor:pointer; }
+  button:hover { border-color:#3a4350; }
+  input[type=range] { flex:1; accent-color:var(--fire); }
+  #clock { min-width:110px; text-align:right; }
+  .legend { display:flex; gap:12px; margin-top:8px; color:var(--dim); }
+  .sw { display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:5px; vertical-align:-1px; }
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+
+<div id="stats" class="panel">
+  <h1>Incident · Ridge Fire</h1>
+  <div class="row"><span>Burned area</span><b id="sArea">0 ha</b></div>
+  <div class="row"><span>Active fire cells</span><b id="sActive" class="fire">0</b></div>
+  <div class="row"><span>Rate of spread</span><b id="sRos">0 ha/h</b></div>
+  <div class="row"><span>Retardant lines</span><b id="sDrops" class="ret">0</b></div>
+  <div class="row"><span>Containment</span><b id="sCont" class="ok">0%</b></div>
+  <div class="row"><span>Wind</span><b id="sWind">—</b></div>
+  <canvas id="chart"></canvas>
+  <div class="legend">
+    <span><i class="sw" style="background:#ff7a1a"></i>burning</span>
+    <span><i class="sw" style="background:#2a2522"></i>burned</span>
+    <span><i class="sw" style="background:#e0457b"></i>retardant</span>
+  </div>
+</div>
+
+<div id="drones" class="panel"><h1>Drone recon</h1><div id="droneList"></div></div>
+
+<div id="timeline" class="panel">
+  <button id="play">Pause</button>
+  <button id="speed">1×</button>
+  <input id="scrub" type="range" min="0" value="0" />
+  <span id="clock">T+00:00</span>
+</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://unpkg.com/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://unpkg.com/three@0.170.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ---------- Config ----------
+const N = 128;                 // grid cells per side
+const SIZE = 128;              // world units per side
+const HEIGHT = 22;             // max terrain height
+const STEPS = 420;             // simulation steps
+const MIN_PER_STEP = 5;        // simulated minutes per step
+const HA_PER_CELL = 0.36;      // 60m x 60m cell
+const WATER = 0.2;             // height threshold for lakes
+const DRONE_COUNT = 4;
+const TOWN = { x: 100, y: 96 };
+const IGNITION = { x: 34, y: 40 };
+
+// State encoding: 0 unburned, 1 burned, 2 retardant, >=3 burning (value-3 = remaining burn steps)
+const UNBURNED = 0, BURNED = 1, RETARDANT = 2, BURNING = 3;
+
+// ---------- Seeded noise ----------
+function mulberry32(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const rand = mulberry32(1337);
+
+function makeNoise(seed) {
+  const r = mulberry32(seed), G = 256, grid = Float32Array.from({ length: G * G }, r);
+  const at = (x, y) => grid[((y & (G - 1)) * G) + (x & (G - 1))];
+  const s = t => t * t * (3 - 2 * t);
+  return (x, y) => {
+    const xi = Math.floor(x), yi = Math.floor(y), fx = s(x - xi), fy = s(y - yi);
+    const a = at(xi, yi), b = at(xi + 1, yi), c = at(xi, yi + 1), d = at(xi + 1, yi + 1);
+    return a + (b - a) * fx + (c - a) * fy + (a - b - c + d) * fx * fy;
+  };
+}
+function fbm(noise, x, y, oct) {
+  let v = 0, amp = 0.5, f = 1, norm = 0;
+  for (let o = 0; o < oct; o++) { v += amp * noise(x * f, y * f); norm += amp; amp *= 0.5; f *= 2.03; }
+  return v / norm;
+}
+
+// ---------- Terrain + fuel ----------
+const heightNoise = makeNoise(7), fuelNoise = makeNoise(99);
+const height = new Float32Array(N * N), fuel = new Float32Array(N * N);
+for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+  const i = y * N + x;
+  const ridge = 1 - Math.abs(fbm(heightNoise, x / 40, y / 40, 5) * 2 - 1);   // ridged ranges
+  const base = fbm(heightNoise, x / 22 + 50, y / 22, 4);
+  height[i] = Math.min(1, Math.max(0, 0.55 * ridge * ridge + 0.5 * base - 0.08));
+  fuel[i] = height[i] < WATER ? 0 : 0.35 + 0.65 * fbm(fuelNoise, x / 14, y / 14, 3);
+}
+
+// ---------- Fire simulation (precomputed so the timeline can scrub) ----------
+const wind = t => { const a = 0.6 + Math.sin(t / 70) * 0.7; return { x: Math.cos(a), y: Math.sin(a), speed: 14 + 8 * Math.sin(t / 37) }; };
+
+function slopeFactor(from, to) { return Math.max(0.3, 1 + (height[to] - height[from]) * 18); }
+
+function planDrop(state) {
+  // Lay a retardant line between the fire's nearest active edge and the town.
+  let best = -1, bestD = Infinity;
+  for (let i = 0; i < N * N; i++) if (state[i] >= BURNING) {
+    const dx = (i % N) - TOWN.x, dy = ((i / N) | 0) - TOWN.y, d = dx * dx + dy * dy;
+    if (d < bestD) { bestD = d; best = i; }
+  }
+  if (best < 0) return null;
+  const fx = best % N, fy = (best / N) | 0, d = Math.sqrt(bestD) || 1;
+  const ux = (TOWN.x - fx) / d, uy = (TOWN.y - fy) / d;       // toward town
+  const cx = fx + ux * 5, cy = fy + uy * 5, half = 9;
+  return { x0: cx - uy * half, y0: cy + ux * half, x1: cx + uy * half, y1: cy - ux * half };
+}
+
+function applyDrop(state, drop) {
+  const len = Math.hypot(drop.x1 - drop.x0, drop.y1 - drop.y0);
+  for (let s = 0; s <= len; s += 0.5) {
+    const px = drop.x0 + (drop.x1 - drop.x0) * s / len, py = drop.y0 + (drop.y1 - drop.y0) * s / len;
+    for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) {
+      const x = Math.round(px + ox), y = Math.round(py + oy);
+      if (x < 0 || y < 0 || x >= N || y >= N) continue;
+      const i = y * N + x;
+      if (state[i] !== BURNED && fuel[i] > 0) state[i] = RETARDANT;
+    }
+  }
+}
+
+function simulate() {
+  const frames = [], stats = [], drops = [];
+  let state = new Uint8Array(N * N);
+  state[IGNITION.y * N + IGNITION.x] = BURNING + 6;
+  for (let t = 0; t < STEPS; t++) {
+    if (t >= 40 && t % 18 === 0) {
+      const drop = planDrop(state);
+      if (drop) { applyDrop(state, drop); drops.push({ step: t, ...drop }); }
+    }
+    frames.push(state);
+    const next = state.slice(), w = wind(t);
+    let burning = 0, burned = 0;
+    for (let i = 0; i < N * N; i++) {
+      const s = state[i];
+      if (s === BURNED) burned++;
+      if (s < BURNING) continue;
+      burning++;
+      next[i] = s === BURNING ? BURNED : s - 1;
+      const x = i % N, y = (i / N) | 0;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        if (!dx && !dy) continue;
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= N || ny >= N) continue;
+        const j = ny * N + nx;
+        if (next[j] !== UNBURNED || fuel[j] === 0) continue;
+        const align = (dx * w.x + dy * w.y) / Math.hypot(dx, dy);
+        const p = 0.08 * fuel[j] * (1 + align * w.speed / 14) * slopeFactor(i, j);
+        if (rand() < p) next[j] = BURNING + 3 + Math.round(fuel[j] * 6);
+      }
+    }
+    stats.push({ burning, burned, drops: drops.length });
+    state = next;
+  }
+  return { frames, stats, drops };
+}
+const sim = simulate();
+
+// ---------- Scene ----------
+const canvas = document.getElementById('scene');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0b0d10);
+scene.fog = new THREE.Fog(0x0b0d10, 140, 320);
+const camera = new THREE.PerspectiveCamera(45, 1, 0.5, 1000);
+camera.position.set(-85, 115, 150);
+const controls = new OrbitControls(camera, canvas);
+controls.target.set(0, 0, 0);
+controls.enableDamping = true;
+controls.maxPolarAngle = Math.PI * 0.47;
+
+scene.add(new THREE.HemisphereLight(0xbcd2ff, 0x1a1410, 0.9));
+const sun = new THREE.DirectionalLight(0xfff1dd, 1.6);
+sun.position.set(-60, 90, 40);
+scene.add(sun);
+
+const toWorld = (x, y) => new THREE.Vector3(x / (N - 1) * SIZE - SIZE / 2, 0, y / (N - 1) * SIZE - SIZE / 2);
+const heightAt = (x, y) => {
+  const cx = Math.min(N - 1, Math.max(0, Math.round(x))), cy = Math.min(N - 1, Math.max(0, Math.round(y)));
+  return Math.max(height[cy * N + cx], WATER) * HEIGHT;
+};
+
+const geo = new THREE.PlaneGeometry(SIZE, SIZE, N - 1, N - 1);
+geo.rotateX(-Math.PI / 2);
+const pos = geo.attributes.position;
+for (let i = 0; i < N * N; i++) pos.setY(i, Math.max(height[i], WATER) * HEIGHT);
+geo.computeVertexNormals();
+const colors = new Float32Array(N * N * 3);
+geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+scene.add(new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, flatShading: false })));
+
+// Contour grid overlay for an analysis-tool look
+const wire = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0x9fb4c8, wireframe: true, transparent: true, opacity: 0.035 }));
+wire.position.y = 0.05;
+scene.add(wire);
+
+const baseColor = new Float32Array(N * N * 3);
+const cTmp = new THREE.Color();
+for (let i = 0; i < N * N; i++) {
+  if (height[i] < WATER) cTmp.setRGB(0.09, 0.2, 0.3);
+  else {
+    const f = fuel[i], h = height[i];
+    cTmp.setRGB(0.16 + 0.22 * h, 0.22 + 0.18 * f - 0.05 * h, 0.12 + 0.05 * h);
+  }
+  baseColor.set([cTmp.r, cTmp.g, cTmp.b], i * 3);
+}
+
+// Fire glow particles
+const MAX_FIRE = N * N;
+const firePos = new Float32Array(MAX_FIRE * 3);
+const fireGeo = new THREE.BufferGeometry();
+fireGeo.setAttribute('position', new THREE.BufferAttribute(firePos, 3));
+const fireMat = new THREE.PointsMaterial({ color: 0xff8a2a, size: 2.2, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false, map: glowTexture() });
+scene.add(new THREE.Points(fireGeo, fireMat));
+
+function glowTexture() {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d'), grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grad.addColorStop(0, 'rgba(255,240,200,1)'); grad.addColorStop(0.3, 'rgba(255,140,40,.8)'); grad.addColorStop(1, 'rgba(255,60,0,0)');
+  g.fillStyle = grad; g.fillRect(0, 0, 64, 64);
+  return new THREE.CanvasTexture(c);
+}
+
+// Town marker
+const townPos = toWorld(TOWN.x, TOWN.y); townPos.y = heightAt(TOWN.x, TOWN.y);
+const town = new THREE.Mesh(new THREE.CylinderGeometry(2.4, 2.4, 0.4, 32), new THREE.MeshBasicMaterial({ color: 0x4cc38a, transparent: true, opacity: 0.6 }));
+town.position.copy(townPos).add(new THREE.Vector3(0, 0.4, 0));
+scene.add(town);
+
+// Drones
+const drones = Array.from({ length: DRONE_COUNT }, (_, k) => {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.OctahedronGeometry(0.9), new THREE.MeshBasicMaterial({ color: 0x7cc4ff }));
+  const beam = new THREE.Mesh(new THREE.ConeGeometry(2.2, 1, 24, 1, true), new THREE.MeshBasicMaterial({ color: 0x7cc4ff, transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false }));
+  g.add(body, beam); scene.add(g);
+  const start = toWorld(TOWN.x, TOWN.y); start.y = 30;
+  g.position.copy(start);
+  return { id: `UAV-${k + 1}`, group: g, beam, target: start.clone(), targetCell: null, phase: k * 1.7 };
+});
+
+// Air tanker
+const tanker = new THREE.Mesh(new THREE.ConeGeometry(0.9, 4, 8), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+tanker.geometry.rotateX(Math.PI / 2);
+tanker.visible = false;
+scene.add(tanker);
+
+// ---------- Hotspot selection (greedy farthest-point over burning cells) ----------
+function hotspots(state, k) {
+  const burning = [];
+  for (let i = 0; i < N * N; i++) if (state[i] >= BURNING) burning.push(i);
+  if (!burning.length) return [];
+  const picks = [burning[(burning.length / 2) | 0]];
+  while (picks.length < k && picks.length < burning.length) {
+    let best = burning[0], bestD = -1;
+    for (const i of burning) {
+      let m = Infinity;
+      for (const p of picks) { const dx = i % N - p % N, dy = ((i / N) | 0) - ((p / N) | 0); m = Math.min(m, dx * dx + dy * dy); }
+      if (m > bestD) { bestD = m; best = i; }
+    }
+    picks.push(best);
+  }
+  return picks;
+}
+
+// ---------- UI ----------
+const $ = id => document.getElementById(id);
+const scrub = $('scrub'); scrub.max = STEPS - 1;
+let step = 0, playing = true, speed = 1, acc = 0, lastHotStep = -1;
+$('play').onclick = () => { playing = !playing; $('play').textContent = playing ? 'Pause' : 'Play'; };
+$('speed').onclick = () => { speed = speed === 4 ? 1 : speed * 2; $('speed').textContent = `${speed}×`; };
+scrub.oninput = () => { step = +scrub.value; acc = 0; };
+
+const chart = $('chart'), cx2 = chart.getContext('2d');
+const maxBurned = Math.max(...sim.stats.map(s => s.burned + s.burning));
+function drawChart() {
+  const w = chart.width = chart.clientWidth * devicePixelRatio, h = chart.height = chart.clientHeight * devicePixelRatio;
+  cx2.clearRect(0, 0, w, h);
+  const plot = (fn, color) => {
+    cx2.beginPath();
+    sim.stats.forEach((s, t) => { const x = t / (STEPS - 1) * w, y = h - fn(s) / maxBurned * (h - 6) - 3; t ? cx2.lineTo(x, y) : cx2.moveTo(x, y); });
+    cx2.strokeStyle = color; cx2.lineWidth = 1.5 * devicePixelRatio; cx2.stroke();
+  };
+  plot(s => s.burned + s.burning, '#8a939e');
+  plot(s => s.burning, '#ff7a1a');
+  for (const d of sim.drops) { const x = d.step / (STEPS - 1) * w; cx2.fillStyle = '#e0457b'; cx2.fillRect(x, h - 5, 1.5 * devicePixelRatio, 5); }
+  const x = step / (STEPS - 1) * w; cx2.fillStyle = '#d8dde4'; cx2.fillRect(x, 0, devicePixelRatio, h);
+}
+
+const compass = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+function updateHud() {
+  const s = sim.stats[step], prev = sim.stats[Math.max(0, step - 12)];
+  const area = (s.burned + s.burning) * HA_PER_CELL;
+  const ros = ((s.burned + s.burning) - (prev.burned + prev.burning)) * HA_PER_CELL / (Math.min(step, 12) * MIN_PER_STEP / 60 || 1);
+  $('sArea').textContent = `${area.toFixed(0)} ha`;
+  $('sActive').textContent = s.burning;
+  $('sRos').textContent = `${ros.toFixed(1)} ha/h`;
+  $('sDrops').textContent = s.drops;
+  $('sCont').textContent = `${s.burning ? Math.min(99, Math.round(100 * s.burned / (s.burned + s.burning * 3))) : 100}%`;
+  const w = wind(step), deg = (Math.atan2(w.x, -w.y) * 180 / Math.PI + 360) % 360;
+  $('sWind').textContent = `${w.speed.toFixed(0)} km/h → ${compass[Math.round(deg / 45) % 8]}`;
+  const mins = step * MIN_PER_STEP;
+  $('clock').textContent = `T+${String((mins / 60) | 0).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`;
+  scrub.value = step;
+  drawChart();
+}
+
+function updateDroneList() {
+  $('droneList').innerHTML = drones.map(d => {
+    const c = d.targetCell;
+    const status = c == null ? 'returning to base' : `tracking hotspot @ ${c % N},${(c / N) | 0}`;
+    const temp = c == null ? '—' : `${(380 + (sim.frames[step][c] - BURNING) * 55).toFixed(0)}°C`;
+    return `<div class="drone"><span class="id">${d.id}</span> · ${temp}<br><span style="color:var(--dim)">${status}</span></div>`;
+  }).join('');
+}
+
+// ---------- Frame update ----------
+function applyFrame() {
+  const state = sim.frames[step];
+  let n = 0;
+  for (let i = 0; i < N * N; i++) {
+    const s = state[i], o = i * 3;
+    if (s === UNBURNED) { colors[o] = baseColor[o]; colors[o + 1] = baseColor[o + 1]; colors[o + 2] = baseColor[o + 2]; }
+    else if (s === BURNED) { colors[o] = 0.1; colors[o + 1] = 0.085; colors[o + 2] = 0.08; }
+    else if (s === RETARDANT) { colors[o] = 0.72; colors[o + 1] = 0.2; colors[o + 2] = 0.34; }
+    else {
+      colors[o] = 1; colors[o + 1] = 0.35 + Math.min(0.4, (s - BURNING) * 0.05); colors[o + 2] = 0.05;
+      const p = toWorld(i % N, (i / N) | 0);
+      firePos[n * 3] = p.x; firePos[n * 3 + 1] = pos.getY(i) + 0.6; firePos[n * 3 + 2] = p.z; n++;
+    }
+  }
+  geo.attributes.color.needsUpdate = true;
+  fireGeo.setDrawRange(0, n);
+  fireGeo.attributes.position.needsUpdate = true;
+
+  if (step !== lastHotStep) {
+    const spots = hotspots(state, DRONE_COUNT);
+    drones.forEach((d, k) => {
+      const c = spots.length ? spots[k % spots.length] : null;
+      d.targetCell = c;
+      if (c == null) { d.target.copy(townPos).setY(30); return; }
+      const p = toWorld(c % N, (c / N) | 0); p.y = heightAt(c % N, (c / N) | 0) + 14;
+      d.target.copy(p);
+    });
+    lastHotStep = step;
+    updateDroneList();
+  }
+  updateHud();
+}
+
+function animateTanker() {
+  const drop = sim.drops.find(d => step >= d.step && step < d.step + 6);
+  tanker.visible = !!drop;
+  if (!drop) return;
+  const t = (step - drop.step + acc) / 6;
+  const a = toWorld(drop.x0, drop.y0), b = toWorld(drop.x1, drop.y1);
+  a.y = b.y = Math.max(heightAt(drop.x0, drop.y0), heightAt(drop.x1, drop.y1)) + 10;
+  const dir = b.clone().sub(a);
+  tanker.position.copy(a).addScaledVector(dir, -0.5 + t * 2);
+  tanker.lookAt(tanker.position.clone().add(dir));
+}
+
+function resize() {
+  const w = innerWidth, h = innerHeight;
+  renderer.setSize(w, h, false); canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
+  camera.aspect = w / h; camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize); resize();
+
+let last = performance.now(), shownStep = -1;
+renderer.setAnimationLoop(now => {
+  const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  if (playing) {
+    acc += dt * 6 * speed;
+    while (acc >= 1) { acc -= 1; step = step < STEPS - 1 ? step + 1 : 0; }
+  }
+  if (step !== shownStep) { applyFrame(); shownStep = step; }
+
+  const time = now / 1000;
+  fireMat.size = 2.0 + Math.sin(time * 9) * 0.25;
+  town.material.opacity = 0.45 + Math.sin(time * 3) * 0.15;
+  drones.forEach(d => {
+    const orbit = d.target.clone().add(new THREE.Vector3(Math.cos(time + d.phase) * 3, Math.sin(time * 2 + d.phase) * 0.4, Math.sin(time + d.phase) * 3));
+    d.group.position.lerp(orbit, 1 - Math.exp(-dt * 1.5));
+    const ground = d.targetCell == null ? 0 : d.group.position.y - (d.target.y - 14);
+    d.beam.visible = d.targetCell != null;
+    d.beam.scale.set(1, Math.max(1, ground), 1);
+    d.beam.position.y = -Math.max(1, ground) / 2;
+  });
+  animateTanker();
+  controls.update();
+  renderer.render(scene, camera);
+});
+</script>
+</body>
+</html>

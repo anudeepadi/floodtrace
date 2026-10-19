@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="/favicon.svg" />
+    <title>FloodTrace · Reconstructing the Langtang–Trishuli flood</title>
+    <meta name="description" content="A 3D reconstruction of the 26 August 2026 glacier-collapse flood in Nepal, on real terrain, calibrated to the one travel time that was observed." />
+    <meta property="og:title" content="FloodTrace" />
+    <meta property="og:description" content="Follow the Langtang–Trishuli flood minute by minute, on real terrain, with every number marked observed, derived or modeled." />
+    <meta property="og:image" content="/media/og.jpg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="stylesheet" href="/src/home/home.css" />
+  </head>
+  <body>
+    <header class="nav">
+      <a class="brand" href="/">FloodTrace</a>
+      <nav>
+        <a href="#how">How it works</a>
+        <a href="#data">Real vs modeled</a>
+        <a href="#next">Where next</a>
+        <a href="https://github.com/anudeepadi/floodtrace">GitHub</a>
+        <a class="btn btn-solid" href="/app/">Open the dashboard</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero">
+        <p class="kicker mono">26 August 2026 · Rasuwa and Nuwakot, Nepal</p>
+        <h1>Trace the Langtang–Trishuli flood, minute by minute.</h1>
+        <p class="lede">
+          At 08:37 a block of rock and ice fell from Langtang Lirung. Seven minutes later the surge destroyed the Gyirong
+          border crossing, and by mid-morning it had run 80 km down the Trishuli. FloodTrace rebuilds that morning on
+          real terrain so you can watch where the water went and when.
+        </p>
+        <div class="actions">
+          <a class="btn btn-solid" href="/app/">Open the dashboard</a>
+          <a class="btn" href="https://github.com/anudeepadi/floodtrace">Read the code</a>
+        </div>
+        <figure class="shot">
+          <img src="/media/dashboard.jpg" alt="The FloodTrace dashboard at 09:30, with the surge 63 km downstream and Betrawati selected" width="1600" height="1000" />
+          <figcaption class="mono">09:30. The front is 63 km from the glacier and 9 of 12 sites have been hit.</figcaption>
+        </figure>
+      </section>
+
+      <section class="figures">
+        <div><span class="num mono">80.7 km</span><span>of river traced over real elevation data</span></div>
+        <div><span class="num mono">7 min</span><span>collapse to Gyirong, the one observed travel time</span></div>
+        <div><span class="num mono">52.4 m/s</span><span>debris speed implied by that observation</span></div>
+        <div><span class="num mono red">1,454+</span><span>people dead in Nepal, 5,285+ missing</span></div>
+      </section>
+
+      <section id="how" class="block">
+        <h2>How it works</h2>
+        <ol class="steps">
+          <li>
+            <h3>Real ground</h3>
+            <p>Twelve elevation tiles from the AWS Terrain dataset and 192 Esri satellite tiles cover a 52 × 69 km box from the glacier to Bidur. They load straight into the browser and become a 786,000-vertex terrain mesh.</p>
+          </li>
+          <li>
+            <h3>A route water would take</h3>
+            <p>Dijkstra's algorithm runs over the elevation grid with a cost that rises steeply with height, so the path hugs valley floors. Chained through the known settlements, it gives an 80.7 km river measured in kilometres.</p>
+          </li>
+          <li>
+            <h3>One observation, two phases</h3>
+            <p>The only timed point is the Gyirong camera: 22 km in 7 minutes, about 52 m/s, close to the published debris estimate. Below Gyirong the front slows toward a 7 m/s flood wave, an assumption based on the 2021 Chamoli flood.</p>
+          </li>
+          <li>
+            <h3>Water that fills the valley</h3>
+            <p>Cross-sections every 60 m carry a water sheet at river bed plus surge height. The terrain hides it wherever the ground is higher, so the flood edge follows the real valley walls, and silt stays on the slopes after it passes.</p>
+          </li>
+        </ol>
+      </section>
+
+      <section class="block split">
+        <div>
+          <h2>Follow the flood</h2>
+          <p>One button replays the morning with the camera chasing the front down the valley. Playback slows for the 52 m/s debris flow and speeds up for the slower flood wave, so the surge crosses the screen at a steady pace. The camera rises over any ridge that would block the view.</p>
+          <p>Cinematic water adds rolling waves, spray and a breaking front for presentations. It draws the surge three times taller and says so on screen. The numbers never change.</p>
+        </div>
+        <figure class="shot">
+          <img src="/media/follow.jpg" alt="Follow mode with cinematic water: a brown surge filling the valley above Betrawati, with spray at the front" width="1600" height="1000" loading="lazy" />
+        </figure>
+      </section>
+
+      <section id="data" class="block">
+        <h2>What is real and what is modeled</h2>
+        <p class="lede-sm">Every time in the dashboard carries one of three labels. The difference matters more than the animation.</p>
+        <div class="cert-grid">
+          <div>
+            <span class="cert cert-observed mono">observed</span>
+            <p>Reported by people or instruments: the 08:37 seismic signal, the 08:44 camera footage at Gyirong, the 09:15 national SMS alert, casualty and damage figures.</p>
+          </div>
+          <div>
+            <span class="cert cert-derived mono">derived</span>
+            <p>Calculated from observations: the 52.4 m/s debris speed, and the Betrawati school evacuation placed 10 minutes before the modeled arrival because the headteacher reported that gap.</p>
+          </div>
+          <div>
+            <span class="cert cert-modeled mono">modeled</span>
+            <p>Produced by the model: arrival times below Gyirong, surge heights and flood width. Site positions are approximate to 1–2 km, and the route is computed, not surveyed.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="next" class="block">
+        <h2>Where next</h2>
+        <ul class="next">
+          <li><b>Real arrival times.</b> Gauge records, CCTV timestamps and witness reports downstream of Gyirong would replace the assumed flood-wave speed with measurements.</li>
+          <li><b>A real hydraulic model.</b> A 2D shallow-water solver over a finer DEM would produce inundation from physics instead of a fitted curve.</li>
+          <li><b>Post-event imagery.</b> Sentinel-2 or Planet scenes from late August would show the actual silt line to check the model against.</li>
+          <li><b>More incidents.</b> The pipeline only needs a DEM box, a list of sites and one observed travel time, so Chamoli 2021 or Melamchi 2021 could follow.</li>
+        </ul>
+      </section>
+
+      <section class="block memorial">
+        <p>More than 1,450 people died in this flood and over 5,000 are still missing. FloodTrace is a way to understand what happened that morning. It is not a forecast and should not be used for warning or rescue decisions.</p>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <div>
+        <a class="brand" href="/">FloodTrace</a>
+        <p>Built by <a href="https://www.heyadi.dev">Anudeep Adiraju</a>. MIT licensed.</p>
+      </div>
+      <div>
+        <p class="mono label">Sources</p>
+        <a href="https://en.wikipedia.org/wiki/2026_Nepal%E2%80%93Tibet_floods">Wikipedia</a>
+        <a href="https://www.undp.org/asia-pacific/nepal-floods-2026">UNDP</a>
+        <a href="https://news.un.org/en/story/2026/09/1168365">UN News</a>
+        <a href="https://www.britannica.com/event/Nepal-floods-of-2026">Britannica</a>
+      </div>
+      <div>
+        <p class="mono label">Data</p>
+        <p>Terrain: AWS Terrain Tiles (SRTM and others)<br />Imagery: Esri, Maxar, Earthstar Geographics</p>
+      </div>
+    </footer>
+  </body>
+</html>

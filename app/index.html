@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="/favicon.svg" />
+    <title>FloodTrace · Langtang–Trishuli Flood</title>
+  </head>
+  <body>
+    <div id="app">
+      <header id="topbar"></header>
+      <aside id="left" class="panel"><div id="layers"></div></aside>
+      <main id="map">
+        <div id="overlay"></div>
+        <div class="map-hud map-hud-tl">
+          <div class="compass" title="North is up the screen at the default view">N</div>
+        </div>
+        <div class="map-hud map-hud-tr">
+          <button id="follow-btn" class="ghost-btn follow-btn" title="Replay from 08:30 with the camera chasing the wave front">Follow the flood</button>
+          <button id="reset-view" class="ghost-btn">Reset view</button>
+        </div>
+        <div id="follow-caption" class="follow-caption" hidden></div>
+        <div id="cinematic-note" class="cinematic-note" hidden>Cinematic water is on. The surge is drawn 3× taller with waves and spray for effect, so it is not to scale. Numbers and charts show the model.</div>
+        <div class="map-hud map-hud-bl">
+          <span class="hud-label">Cursor</span><span id="cursor-readout" class="mono">—</span>
+        </div>
+        <div class="map-hud map-hud-br attribution">
+          Terrain: AWS Terrain Tiles (SRTM) · Imagery: Esri, Maxar, Earthstar Geographics · Vertical ×1.35 · Downstream arrivals modeled
+        </div>
+      </main>
+      <aside id="right" class="panel">
+        <div id="inspector"></div>
+        <div id="events"></div>
+      </aside>
+      <footer id="bottom" class="panel">
+        <div id="timeline"></div>
+        <div id="charts"></div>
+      </footer>
+    </div>
+    <div id="loading"><div class="spinner"></div><span class="loading-text">Initialising…</span></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

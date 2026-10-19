@@ -1,0 +1,15 @@
+/* Monochrome UI. Red is reserved for the wave front, impacted sites and loss of life. */
+:root {
+  --bg-0: #000;
+  --bg-1: #0b0b0b;
+  --bg-2: #121212;
+  --bg-3: #1b1b1b;
+  --line: #242424;
+  --line-2: #363636;
+  --text-0: #f2f2f2;
+  --text-1: #b0b0b0;
+  --text-2: #767676;
+  --red: #e5484d;
+  --mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+}
