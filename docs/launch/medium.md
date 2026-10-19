@@ -1,70 +1,70 @@
 # I rebuilt the Langtang–Trishuli flood in a browser
 
-*Subtitle: What one camera timestamp can and cannot tell you about a disaster.*
+*What one camera timestamp can and can't tell you about a disaster.*
 
-On the morning of 26 August, a block of rock and ice broke off the north face of Langtang Lirung. The seismic signal was logged at 08:37 Nepal time. Seven minutes later a surveillance camera at the Gyirong border crossing recorded the surge destroying it. By the end of the morning the flood had run 80 km down the Trishuli. More than 1,450 people died in Nepal, and over 5,000 are still missing.
+On the morning of 26 August, a block of rock and ice broke off the north face of Langtang Lirung. Seven minutes later, a surveillance camera at the Gyirong border crossing filmed the surge destroying it. By late morning the flood had run 80 km down the Trishuli. More than 1,450 people died in Nepal.
 
-I wanted to see that morning, not just read about it. So I built FloodTrace, a 3D reconstruction on real terrain that you can scrub minute by minute.
+I wanted to see that morning, not just read about it. I built FloodTrace, a 3D reconstruction on real terrain that you can scrub minute by minute.
 
-[Hero image: dashboard at 09:30]
+[Image: the dashboard at 09:30]
 
 ## Where it started
 
-A few weeks earlier I saw Dilum Sanjaya's wildfire analysis demo on X: fire spreading over terrain, drones tracking hot spots, aircraft dropping retardant. His terrain was procedural, and someone in the replies asked which elevation model he had used. That reply stuck with me. The same kind of tool on real ground would be useful for understanding an event, not just showing one.
+In early October I saw Dilum Sanjaya's wildfire demo on X. Fire spread across terrain while drones tracked hot spots. His terrain was procedural, and someone in the replies asked which elevation model he used. That question stayed with me. The same kind of tool on real ground could help explain an event instead of just showing one.
 
-I built it with Claude Code as a pair. I made the calls on scope, data and design, and Claude wrote most of the code and tests. That split worked well, and I'll come back to where it needed correcting.
+My first request was a tool for the Nepal tsunami. Nepal has no coast. What I meant was the flood, and that's where the project began.
+
+I built it with Claude Code. I made the calls on scope, data and design. Claude wrote most of the code and the tests.
 
 ## Real ground first
 
-The terrain is 12 tiles from the AWS Terrain dataset, decoded from PNG colour values into metres. On top sits Esri satellite imagery. Both load straight into the browser, covering a 52 by 69 km box from the glacier to Bidur.
+The terrain comes from public AWS elevation tiles, with Esri satellite imagery on top. Both load straight into the browser.
 
-There is no surveyed river channel at this resolution, so the route comes from a shortest-path search over the elevation grid. Each step gets more expensive the higher it is, so the path stays on valley floors. Chained through the settlements the flood hit, it gives an 80.7 km river with a distance at every point.
+There is no surveyed river channel at this resolution. Instead, a shortest-path search runs over the elevation grid. Every step costs more the higher it climbs, so the path settles onto the valley floor. Chained through the towns the flood reached, it becomes a river with a distance at every point.
 
 ## One timestamp
 
-This was the most interesting part. The only timed observation on the river is that camera at Gyirong. The route from the collapse to Gyirong is 22 km. Covering that in 7 minutes means an average of 52.4 m/s.
+The only timed point on the whole river is that camera at Gyirong. The traced route there is 22 km. Covering it in 7 minutes means about 52 m/s, which matches the published estimate for the debris flow.
 
-My first model treated the front as a single decaying speed, starting from the published debris estimate of about 52 m/s. It refused to calibrate, because 22 km in 7 minutes needs slightly more than 52 m/s on average. The fallback ran the front at full speed down the whole river and had it reaching Trishuli Bazar by 09:01. That is not credible.
+My first model used one speed curve for the whole river. It couldn't fit the observation, and its fallback had the surge reaching Trishuli Bazar by 09:01. That's not credible.
 
-The fix was to stop forcing one curve to do two jobs. Collapse to Gyirong now runs at the speed the observation implies. Below Gyirong the front slows toward a 7 m/s flood wave, which is close to the average speed of the 2021 Chamoli flood in India. That second part is an assumption, and the app says so.
+The fix was to split the river in two. Above Gyirong, the front moves at the speed the camera implies. Below it, the front slows toward a normal flood wave, using the 2021 Chamoli flood in India as a guide. That second part is my assumption, and the app says so.
 
 ## Labelling what is real
 
-This is a reconstruction of a real disaster, so I didn't want the animation to blur what was recorded and what was computed. Every time in the dashboard has one of three labels:
+This is a real disaster. I didn't want the animation to blur what was recorded with what was computed, so every time in the dashboard carries one of three labels.
 
-- **Observed**, for things people or instruments recorded. The 08:44 camera footage, the 09:15 national SMS alert, the casualty figures.
-- **Derived**, for things calculated from observations. The 52.4 m/s debris speed. The Betrawati school evacuation, placed 10 minutes before the modeled arrival because the headteacher reported that gap.
-- **Modeled**, for everything downstream of Gyirong: arrival times, surge height, flood width.
-
-The data tests check that no model-derived event can be marked observed.
+Observed means a person or an instrument recorded it, like the camera footage or the national SMS alert. Derived means I calculated it from an observation, like the debris speed. Modeled covers everything below Gyirong: arrival times, how high the water rose, how wide it spread. A test makes sure a modeled event can never be marked observed.
 
 ## Water that fills the valley
 
-The first version drew the flood as a flat ribbon. It looked like a road. The version that works builds cross-sections across the valley every 60 m and places a water surface at river bed plus surge height. Wherever the ground is higher than the water, the terrain hides it, so the flood's edge follows the real valley walls. After the surge passes, a silt mark stays on the slopes.
+The first version drew the flood as a flat ribbon. It looked like a road.
 
-There is also a follow mode. The camera starts on the glacier and chases the front down the valley. The hard part was that ridges in river bends kept hiding the water. Lifting the camera above the highest ground wasn't enough, because the line of sight slopes down to the front. The camera now solves for a height where the whole line clears the terrain.
+The version that works lays cross-sections across the valley and puts a water surface at river level plus the surge height. Where the ground is higher than the water, the terrain hides it. The flood's edge ends up following the real valley walls. After the surge passes, a silt mark stays on the slopes.
+
+There is also a follow mode. The camera starts on the glacier and chases the front down the valley. Ridges in the river bends kept hiding the water. The camera now solves for a height where its whole line of sight clears the terrain.
 
 [Image: follow mode above Betrawati]
 
-For presentations there is a cinematic layer with rolling waves, spray and a breaking front. It draws the surge three times taller and keeps a notice on screen while it is on.
+For presentations, a cinematic layer adds waves, spray and a breaking front. It draws the surge three times taller and keeps a notice on screen while it's on. The numbers never change.
 
 ## Where Claude needed correcting
 
-The first design used a blue, glowing dashboard style with badges everywhere. It looked generated, and I asked for black and white. The first water was too thin to see from a normal camera distance. A label overlap fix applied the same offset twice. Each of these showed up in a screenshot, not in a test, which is the main gap I want to close next.
+The first design was a blue, glowing dashboard covered in badges. It looked generated, so I asked for black and white. The first water was too thin to see from a normal camera distance. A label fix applied the same offset twice. Each of these showed up in a screenshot, not a test. That's the gap I want to close next.
 
 ## What's next
 
-The model needs more observations. Gauge records, hydropower CCTV timestamps or dated witness accounts below Gyirong would replace my assumed flood-wave speed with measurements. Post-event Sentinel-2 imagery would show the real silt line to check against. A 2D shallow-water solver would replace the fitted curve with physics.
+The model needs more observations. Gauge records or timestamped footage from below Gyirong would replace my assumed flood speed with real measurements. Post-event satellite imagery would show the real silt line to check the model against.
 
-FloodTrace is open source under MIT. You can open the dashboard, press Follow the flood, and watch the morning in about a minute.
+FloodTrace is open source. Open the dashboard, press Follow the flood, and the whole morning plays in about a minute.
 
 Live: https://floodtrace-delta.vercel.app
 Code: https://github.com/anudeepadi/floodtrace
 
-If you work on Himalayan hazards and have timed observations from that morning, I would love to add them.
+If you have timed observations from below Gyirong that morning, could you send them my way?
 
 ---
 
-*FloodTrace is a reconstruction for understanding what happened. It is not a forecast and should not be used for warning or rescue decisions.*
+*FloodTrace is a reconstruction for understanding what happened. It is not a forecast, and it should not be used for warning or rescue decisions.*
 
 *Tags: Data Visualization, Climate, Nepal, Three.js, GIS*
