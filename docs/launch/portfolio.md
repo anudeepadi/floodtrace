@@ -23,4 +23,4 @@ The only timed point on the river is a camera at the Gyirong crossing, 7 minutes
 
 ### [FloodTrace](https://github.com/anudeepadi/floodtrace)
 
-A 3D reconstruction of the 2026 Langtang–Trishuli flood on real terrain. [Open the dashboard](https://floodtrace.vercel.app/app/) and press Follow the flood. Times below the Gyirong crossing are modeled, and the app labels them that way.
+A 3D reconstruction of the 2026 Langtang–Trishuli flood on real terrain. [Open the dashboard](https://floodtrace-delta.vercel.app/app/) and press Follow the flood. Times below the Gyirong crossing are modeled, and the app labels them that way.

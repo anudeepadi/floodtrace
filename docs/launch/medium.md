@@ -58,7 +58,7 @@ The model needs more observations. Gauge records, hydropower CCTV timestamps or 
 
 FloodTrace is open source under MIT. You can open the dashboard, press Follow the flood, and watch the morning in about a minute.
 
-Live: https://floodtrace.vercel.app
+Live: https://floodtrace-delta.vercel.app
 Code: https://github.com/anudeepadi/floodtrace
 
 If you work on Himalayan hazards and have timed observations from that morning, I would love to add them.

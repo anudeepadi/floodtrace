@@ -2,7 +2,7 @@
 
 A 3D reconstruction of the 26 August 2026 Langtang–Trishuli flood in Nepal. Real terrain, real imagery, and a flood model calibrated to the one travel time anyone observed.
 
-**[Live site](https://floodtrace.vercel.app)** · **[Open the dashboard](https://floodtrace.vercel.app/app/)** · [How it was built](docs/APPROACH.md) · [Roadmap](docs/ROADMAP.md)
+**[Live site](https://floodtrace-delta.vercel.app)** · **[Open the dashboard](https://floodtrace-delta.vercel.app/app/)** · [How it was built](docs/APPROACH.md) · [Roadmap](docs/ROADMAP.md)
 
 ![The FloodTrace dashboard at 09:30, with the surge 63 km downstream and Betrawati selected](public/media/dashboard.jpg)
 

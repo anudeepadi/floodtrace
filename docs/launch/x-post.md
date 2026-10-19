@@ -9,7 +9,7 @@ I rebuilt the 26 August Langtang–Trishuli flood on real terrain.
 One camera timestamp anchors it: the Gyirong crossing went at 08:44, 7 minutes after the collapse. That's 52 m/s. Everything downstream is labelled modeled.
 
 Open source, in the browser.
-floodtrace.vercel.app
+floodtrace-delta.vercel.app
 
 ## Reply under it
 
@@ -21,4 +21,4 @@ Code: github.com/anudeepadi/floodtrace
 
 Built a browser reconstruction of the Langtang–Trishuli flood. Real terrain, one observed travel time, and every number marked observed, derived or modeled.
 
-floodtrace.vercel.app
+floodtrace-delta.vercel.app
